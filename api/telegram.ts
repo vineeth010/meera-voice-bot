@@ -3,6 +3,7 @@ import { sendMessage, sendChatAction } from "../lib/telegram";
 import { generateDraft } from "../lib/gemini";
 import { getVoiceInstructions } from "../lib/voice";
 import { scoreNote } from "../lib/scoring";
+import { getNewsAngle } from "../lib/news";
 
 const SCORE_THRESHOLD = 6;
 
@@ -70,8 +71,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
+    const newsItem = await getNewsAngle(text);
     const voiceInstructions = getVoiceInstructions();
-    const draft = await generateDraft(text, voiceInstructions);
+    const draft = await generateDraft(text, voiceInstructions, newsItem);
     await sendMessage(chatId, draft);
   } catch (err) {
     console.error("Failed to process note:", err);

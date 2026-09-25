@@ -1,3 +1,5 @@
+import type { NewsItem } from "./news";
+
 const DEFAULT_MODEL = "gemini-3.6-flash";
 
 interface GeminiResponse {
@@ -8,14 +10,18 @@ interface GeminiResponse {
   }>;
 }
 
-export async function generateDraft(note: string, voiceInstructions: string): Promise<string> {
+export async function generateDraft(
+  note: string,
+  voiceInstructions: string,
+  newsItem?: NewsItem | null
+): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
   const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  const systemInstruction = [
+  const promptLines = [
     "You are Meera's ghostwriter. She sends you a raw, unpolished note and you turn it into a",
     "finished draft post that sounds like she wrote it herself.",
     "",
@@ -27,7 +33,39 @@ export async function generateDraft(note: string, voiceInstructions: string): Pr
     "",
     "=== VOICE INSTRUCTIONS ===",
     voiceInstructions || "(No voice instructions have been provided yet — write in a clear, natural, first-person voice.)",
-  ].join("\n");
+  ];
+
+  if (newsItem) {
+    promptLines.push(
+      "",
+      "=== POSSIBLE NEWS ANGLE ===",
+      "A related news item was found. If this news item is genuinely relevant, use it to make",
+      "the post timely. If it doesn't fit naturally, ignore it. The note's original idea must",
+      "remain the core of the post — news must NOT hijack the post or force an artificial",
+      "connection.",
+      "",
+      `Headline: ${newsItem.headline}`,
+      `Source: ${newsItem.publication}`,
+      `Date: ${newsItem.date}`,
+      `Summary: ${newsItem.summary}`,
+      `URL: ${newsItem.url}`,
+      "",
+      "If — and only if — you genuinely use this news item in the post, append this exact block,",
+      "verbatim and unmodified, as the very last thing in your response, on its own lines:",
+      "",
+      "─────────────────────────────────",
+      `NEWS SOURCE: ${newsItem.headline}`,
+      `FROM: ${newsItem.publication} · ${newsItem.date}`,
+      `LINK: ${newsItem.url}`,
+      "⚠ Check this before publishing — you are the author of this claim",
+      "─────────────────────────────────",
+      "",
+      "If you do not use the news item, do NOT include this block, and do not mention the news",
+      "item at all."
+    );
+  }
+
+  const systemInstruction = promptLines.join("\n");
 
   const res = await fetch(url, {
     method: "POST",
