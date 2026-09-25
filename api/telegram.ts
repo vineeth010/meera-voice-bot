@@ -2,6 +2,9 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { sendMessage, sendChatAction } from "../lib/telegram";
 import { generateDraft } from "../lib/gemini";
 import { getVoiceInstructions } from "../lib/voice";
+import { scoreNote } from "../lib/scoring";
+
+const SCORE_THRESHOLD = 6;
 
 const WELCOME_MESSAGE =
   "Hi! Send me a note and I'll turn it into a draft post in your voice.";
@@ -59,11 +62,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     await sendChatAction(chatId, "typing");
+
+    const { score, reason } = await scoreNote(text);
+    if (score < SCORE_THRESHOLD) {
+      await sendMessage(chatId, `Skipping this one — score ${score}/10. ${reason}`);
+      res.status(200).json({ ok: true });
+      return;
+    }
+
     const voiceInstructions = getVoiceInstructions();
     const draft = await generateDraft(text, voiceInstructions);
     await sendMessage(chatId, draft);
   } catch (err) {
-    console.error("Failed to generate draft:", err);
+    console.error("Failed to process note:", err);
     await sendMessage(
       chatId,
       "Sorry, something went wrong generating that draft. Please try again in a moment."
